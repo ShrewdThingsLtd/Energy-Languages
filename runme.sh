@@ -10,11 +10,12 @@ docker_cleanup() {
 	docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
 	docker rmi $(docker images | grep "none" | awk '/ / { print $3 }')
 	docker rm $(docker ps -qa --no-trunc --filter "status=exited")
+	sleep 1
 }
 
 docker build -t $DOCKER_IMG ./
-docker_cleanup
 docker kill $DOCKER_INST
+docker_cleanup
 docker run --name $DOCKER_INST -td --rm $DOCKER_IMG /bin/bash
 docker exec -ti $DOCKER_INST /bin/bash
 
