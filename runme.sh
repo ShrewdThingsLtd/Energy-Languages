@@ -16,6 +16,15 @@ docker_cleanup() {
 docker build -t $DOCKER_IMG ./
 docker kill $DOCKER_INST
 docker_cleanup
-docker run --name $DOCKER_INST -td --rm $DOCKER_IMG /bin/bash
-docker exec -ti $DOCKER_INST /bin/bash
+modprobe msr
+docker run \
+	--name $DOCKER_INST \
+	-td \
+	--rm \
+	--privileged \
+	--cap-add=ALL \
+	-v /dev:/dev \
+	-v /lib/modules:/lib/modules \
+	$DOCKER_IMG /bin/bash
+#docker exec -ti $DOCKER_INST /bin/bash
 

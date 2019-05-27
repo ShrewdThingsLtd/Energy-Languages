@@ -12,8 +12,14 @@ RUN apt-get -y update && apt-get -y install python3 python3-pip libpcre3-dev lib
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 WORKDIR /usr/src/Energy-Languages
 RUN ./gen-input.sh
+RUN cp knucleotide-input25000000.txt ./C/k-nucleotide/
+RUN cp knucleotide-input25000000.txt ./Python/k-nucleotide/
 RUN pip3 install -U lazyme
-RUN apt-get -y install 2to3
+RUN apt-get -y install 2to3 sudo
 RUN cd ./C/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
 RUN cd ./Python/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
+#RUN cd ./C/ && rm -f ./C.csv && python ./compile_all.py measure
+#RUN cat ./C/C.csv
+#RUN cd ./Python/ && rm -f ./Python.csv && python ./compile_all.py measure
+#RUN cat ./Python/Python.csv
 
