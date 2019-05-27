@@ -27,7 +27,8 @@ RUN autoreconf -i
 RUN ./configure && make && make install
 WORKDIR /usr/src/Energy-Languages
 RUN mkdir -p /usr/local/src/Python-3.6.1/bin && ln -sf /usr/bin/python /usr/local/src/Python-3.6.1/bin/python3.6
-RUN pip3 install -U pypl2
+RUN apt-get -y update && apt-get -y install libmpfr-dev libmpfr6 libmpc-dev libmpc3
+RUN pip3 install -U gmpy2
 
 #RUN cd ./C/ && rm -f ./C.csv && python ./compile_all.py measure
 #RUN cat ./C/C.csv
