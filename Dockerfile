@@ -18,6 +18,15 @@ RUN pip3 install -U lazyme
 RUN apt-get -y install 2to3 sudo
 RUN cd ./C/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
 RUN cd ./Python/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
+
+WORKDIR /usr/src
+RUN git clone https://github.com/HPC-ULL/eml.git
+WORKDIR /usr/src/eml
+RUN apt-get -y update && apt-get -y install msrtool automake libtool libconfuse2 libconfuse-common libconfuse-dev pkg-config
+RUN autoreconf -i
+RUN ./configure && make && make install
+WORKDIR /usr/src/Energy-Languages
+
 #RUN cd ./C/ && rm -f ./C.csv && python ./compile_all.py measure
 #RUN cat ./C/C.csv
 #RUN cd ./Python/ && rm -f ./Python.csv && python ./compile_all.py measure
