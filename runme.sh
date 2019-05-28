@@ -21,6 +21,7 @@ docker run \
 	--name $DOCKER_INST \
 	-td \
 	--rm \
+	--pid=host \
 	--privileged \
 	--cap-add=ALL \
 	-v /dev:/dev \
