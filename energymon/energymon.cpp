@@ -1,8 +1,15 @@
 
 #include <chrono>
 #include <string>
-#include <eml.h>
 #include <unistd.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <eml.h>
+#ifdef __cplusplus
+}
+#endif
 
 class hires_clock {
 
