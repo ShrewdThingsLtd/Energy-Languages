@@ -15,13 +15,17 @@ extern "C" {
 #endif
 
 struct sysrecord {
+	
+	static const uint64_t args_str_limit = 128;
 
 	std::string _sysname;
 	std::string _topmemapp;
+	std::string _topmemargs;
 	std::string _topmemtime;
 	std::string _topmem;
 	std::string _topmemcpu;
 	std::string _topcpuapp;
+	std::string _topcpuargs;
 	std::string _topcputime;
 	std::string _topcpumem;
 	std::string _topcpu;
@@ -80,15 +84,21 @@ public:
 		
 	system_top_mem(sysrecord &rec) {
 		
-		exec("ps -heo ucmd,etime,%mem,%cpu --sort=-%mem | head -n 1");
+		exec("ps -heo %mem,%cpu,etime,ucmd,cmd --sort=-%mem | head -n 1");
 		std::istringstream iss(get_ret_str());
 		std::vector<std::string> ret_vec {
 			std::istream_iterator<std::string>(iss), {}
 		};
-		rec._topmemapp = ret_vec[0];
-		rec._topmemtime = ret_vec[1];
-		rec._topmem = ret_vec[2];
-		rec._topmemcpu = ret_vec[3];
+		rec._topmem = ret_vec[0];
+		rec._topmemcpu = ret_vec[1];
+		rec._topmemtime = ret_vec[2];
+		rec._topmemapp = ret_vec[3];
+		rec._topmemargs = ">";
+		for(uint64_t i = 5; i < ret_vec.size(); ++i) {
+			if((ret_vec[i].size() > 0) && (rec._topmemargs.size() + ret_vec[i].size() < sysrecord::args_str_limit)) {
+				rec._topmemargs += ret_vec[i] + ">";
+			};
+		};
 	};
 };
 
@@ -98,15 +108,21 @@ public:
 		
 	system_top_cpu(sysrecord &rec) {
 		
-		exec("ps -heo ucmd,etime,%mem,%cpu --sort=-%cpu | head -n 1");
+		exec("ps -heo %mem,%cpu,etime,ucmd,cmd --sort=-%cpu | head -n 1");
 		std::istringstream iss(get_ret_str());
 		std::vector<std::string> ret_vec {
 			std::istream_iterator<std::string>(iss), {}
 		};
-		rec._topcpuapp = ret_vec[0];
-		rec._topcputime = ret_vec[1];
-		rec._topcpumem = ret_vec[2];
-		rec._topcpu = ret_vec[3];
+		rec._topcpumem = ret_vec[0];
+		rec._topcpu = ret_vec[1];
+		rec._topcputime = ret_vec[2];
+		rec._topcpuapp = ret_vec[3];
+		rec._topcpuargs = ">";
+		for(uint64_t i = 5; i < ret_vec.size(); ++i) {
+			if((ret_vec[i].size() > 0) && (rec._topcpuargs.size() + ret_vec[i].size() < sysrecord::args_str_limit)) {
+				rec._topcpuargs += ret_vec[i] + ">";
+			};
+		};
 	};
 };
 
@@ -186,9 +202,11 @@ template <typename energymetric> class energymon : protected energymetric {
 		
 		const sysrecord &sys_rec = energymetric::get_sys_rec();
 		sys_rec_str += sys_rec._sysname + ",metrictype=" + energymetric::metrictype();
-		sys_rec_str += ",topmemapp=" + sys_rec._topmemapp + ",topmemtime=" + sys_rec._topmemtime;
-		sys_rec_str += ",topcpuapp=" + sys_rec._topcpuapp + ",topcputime=" + sys_rec._topcputime;
-		sys_rec_str += ",topmem=" + sys_rec._topmem + ",topmemcpu=" + sys_rec._topmemcpu;
+		sys_rec_str += ",topmemtime=" + sys_rec._topmemtime + ",topmemapp=" + sys_rec._topmemapp;
+		sys_rec_str += ",topcputime=" + sys_rec._topcputime + ",topcpuapp=" + sys_rec._topcpuapp;
+		sys_rec_str += ",topmemargs=" + sys_rec._topmemargs;
+		sys_rec_str += ",topcpuargs=" + sys_rec._topcpuargs;
+		sys_rec_str += " topmem=" + sys_rec._topmem + ",topmemcpu=" + sys_rec._topmemcpu;
 		sys_rec_str += ",topcpumem=" + sys_rec._topcpumem + ",topcpu=" + sys_rec._topcpu;
 		sys_rec_str += " " + std::to_string(now_nsec) + "\n";
 	};
@@ -197,7 +215,7 @@ template <typename energymetric> class energymon : protected energymetric {
 		
 		const devrecord &dev_rec = energymetric::get_dev_rec(dev_idx);
 		dev_rec_str += dev_rec._devname + ",metrictype=" + energymetric::metrictype();
-		dev_rec_str += " consumed=" + std::to_string(dev_rec._consumed) + ",elapsed=" + std::to_string(dev_rec._elapsed);
+		dev_rec_str += " consumed=" + std::to_string(dev_rec._consumed) + ",elapsed=" + std::to_string(dev_rec._elapsed) + ",jps=" + std::to_string(dev_rec._consumed / dev_rec._elapsed);
 		dev_rec_str += " " + std::to_string(now_nsec) + "\n";
 	};
 	
@@ -205,9 +223,9 @@ public:
 	
 	energymon(const std::string &sysname) : energymetric(sysname) {};
 	
-	void poll(const uint64_t iters) {
-		
-		for (uint64_t it = 0; it < iters; ++it) {
+	void poll() {
+			
+		while (true) {
 			energymetric::collect();
 			const uint64_t now_nsec = _clock.now_nsec();
 			std::string rec_str;
@@ -224,85 +242,6 @@ public:
 int main() {
 	
 	energymon<energymetric_eml> mon_eml("sut152");
-	mon_eml.poll(3);
+	mon_eml.poll();
 	return 0;
 };
-
-
-#if 0
-
-/*
- * Copyright (c) 2014 Universidad de La Laguna <cap@pcg.ull.es>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
- * any later version.
- */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-#include <eml.h>
-
-void check_error(emlError_t ret) {
-  if (ret != EML_SUCCESS) {
-    fprintf(stderr, "error: %s\n", emlErrorMessage(ret));
-    exit(1);
-  }
-}
-
-int main(int argc, char** argv) {
-  if (argc < 2) {
-    if (argc)
-      printf("usage: %s command-string\n", argv[0]);
-    return 1;
-  }
-
-  //initialize EML
-  check_error(emlInit());
-
-  //get total device count
-  size_t count;
-  check_error(emlDeviceGetCount(&count));
-  emlData_t* data[count];
-
-  //start measuring
-  check_error(emlStart());
-
-  if (system(argv[1])) {};
-
-  //stop measuring and gather data
-  check_error(emlStop(data));
-
-  //print energy/time and free results
-  char rec_str[4096];
-  char *rec_ptr = rec_str;
-  rec_ptr += sprintf(rec_ptr, "energy,framework=eml devs=%ld", count);
-  for (size_t i = 0; i < count; i++) {
-    double consumed, elapsed;
-    check_error(emlDataGetConsumed(data[i], &consumed));
-    check_error(emlDataGetElapsed(data[i], &elapsed));
-    //FILE *fjson = fopen("/tmp/eml.json", "a");
-    //check_error(emlDataDumpJSON(data[i], fjson));
-    //fclose(fjson);
-    check_error(emlDataFree(data[i]));
-
-    emlDevice_t* dev;
-    check_error(emlDeviceByIndex(i, &dev));
-    const char* devname;
-    emlDeviceType_t devtype;
-    check_error(emlDeviceGetName(dev, &devname));
-    check_error(emlDeviceGetType(dev, &devtype));
-    rec_ptr += sprintf(rec_ptr, ",%s_type=%d,%s_jps=%g", devname, devtype, devname, (consumed / elapsed));
-    //printf("%s(%d): %gJ in %gs\n", devname, devtype, consumed, elapsed);
-  }
-  printf("%s\n", rec_str);
-
-  check_error(emlShutdown());
-  return 0;
-}
-
-#endif
-
