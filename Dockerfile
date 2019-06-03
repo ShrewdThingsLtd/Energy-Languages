@@ -30,6 +30,9 @@ RUN mkdir -p /usr/local/src/Python-3.6.1/bin && ln -sf /usr/bin/python /usr/loca
 RUN apt-get -y update && apt-get -y install libmpfr-dev libmpfr6 libmpc-dev libmpc3
 RUN pip3 install -U gmpy2
 
+COPY ./energymon /usr/src/Energy-Languages/energymon
+RUN g++ -g ./energymon/energymon.cpp -leml -o ./energymon/energymon
+
 #RUN cd ./C/ && rm -f ./C.csv && python ./compile_all.py measure
 #RUN cat ./C/C.csv
 #RUN cd ./Python/ && rm -f ./Python.csv && python ./compile_all.py measure
