@@ -1,10 +1,12 @@
 
+#include <algorithm>
 #include <chrono>
 #include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <unistd.h>
+#include <curl/curl.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +43,51 @@ struct devrecord {
 	double _elapsed;
 	
 	devrecord() : _devname("") {};
+};
+
+class influxdbv1_client {
+	
+	std::string _write_url;
+	std::string _username;
+	std::string _password;
+	CURL *_curl;
+	std::string _response_str;
+
+	static size_t get_response_chunk(const char *ptr, size_t size, size_t nmemb, influxdbv1_client *client) {
+		
+		client->_response_str += std::string(ptr, (size * nmemb));
+		return nmemb;
+	};
+
+public:
+	
+	influxdbv1_client(const std::string &url, const std::string &username, const std::string &password) : 
+		_write_url(url), _username(username), _password(password), _curl(NULL) {
+		
+		curl_global_init(CURL_GLOBAL_ALL);
+	};
+	
+	void write_points(const std::string &points) {
+		
+		_response_str = "";
+		_curl = curl_easy_init();
+		if (_curl) {
+			curl_easy_setopt(_curl, CURLOPT_URL, _write_url.c_str());
+			curl_easy_setopt(_curl, CURLOPT_POST, 1L);
+			curl_easy_setopt(_curl, CURLOPT_HTTPAUTH, (long)CURLAUTH_BASIC);
+			curl_easy_setopt(_curl, CURLOPT_USERNAME, _username.c_str());
+			curl_easy_setopt(_curl, CURLOPT_PASSWORD, _password.c_str());
+			curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, get_response_chunk);
+			curl_easy_setopt(_curl, CURLOPT_WRITEDATA, (void *)this);
+			curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, points.c_str());
+			CURLcode res = curl_easy_perform(_curl);
+			if (res != CURLE_OK) {
+				fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			};
+			curl_easy_cleanup(_curl);
+			printf("%s\n", _response_str.c_str());
+		};
+	};
 };
 
 class hires_clock {
@@ -99,6 +146,7 @@ public:
 				rec._topmemargs += ret_vec[i] + ">";
 			};
 		};
+		std::replace(rec._topmemargs.begin(), rec._topmemargs.end(), '=', ':');
 	};
 };
 
@@ -123,6 +171,7 @@ public:
 				rec._topcpuargs += ret_vec[i] + ">";
 			};
 		};
+		std::replace(rec._topcpuargs.begin(), rec._topcpuargs.end(), '=', ':');
 	};
 };
 
@@ -194,9 +243,10 @@ protected:
 	};
 };
 
-template <typename energymetric> class energymon : protected energymetric {
+template <typename energymetric, typename influxdb_client> class energymon : protected energymetric {
 	
 	hires_clock _clock;
+	influxdb_client _influxdb;
 	
 	void concat_sys_rec(std::string &sys_rec_str, const uint64_t now_nsec) {
 		
@@ -221,7 +271,7 @@ template <typename energymetric> class energymon : protected energymetric {
 	
 public:
 	
-	energymon(const std::string &sysname) : energymetric(sysname) {};
+	energymon(const std::string &sysname, const std::string &url, const std::string &username, const std::string &password) : energymetric(sysname), _influxdb(url, username, password) {};
 	
 	void poll() {
 			
@@ -234,6 +284,7 @@ public:
 			for (size_t dev_idx = 0; dev_idx < devcount; ++dev_idx) {
 				concat_dev_rec(rec_str, dev_idx, now_nsec);
 			};
+			_influxdb.write_points(rec_str);
 			printf("%s", rec_str.c_str());
 		};
 	};
@@ -241,7 +292,7 @@ public:
 
 int main() {
 	
-	energymon<energymetric_eml> mon_eml("sut152");
+	energymon<energymetric_eml, influxdbv1_client> mon_eml("sut152", "https://localhost:8086/write?db=energydb0", "root", "root");
 	mon_eml.poll();
 	return 0;
 };

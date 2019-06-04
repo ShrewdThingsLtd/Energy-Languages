@@ -1,7 +1,10 @@
 #!/bin/bash
 #MAINTAINER erez@shrewdthings.com
-DOCKER_IMG='energy-languages-img'
-DOCKER_INST='energy-languages-inst'
+ENERGYBENCH_IMG='energybench-img'
+ENERGYMON_IMG='energymon-img'
+ENERGYMON_INST='energymon-inst'
+
+ROOTDIR=$PWD
 
 docker_cleanup() {
 
@@ -13,12 +16,18 @@ docker_cleanup() {
 	sleep 1
 }
 
-docker build -t $DOCKER_IMG ./
-docker kill $DOCKER_INST
+cd $ROOTDIR/energybench
+docker build -t $ENERGYBENCH_IMG ./
+cd -
+cd $ROOTDIR/energymon
+docker build -t $ENERGYMON_IMG ./
+cd -
+
+docker kill $ENERGYMON_INST
 docker_cleanup
 modprobe msr
 docker run \
-	--name $DOCKER_INST \
+	--name $ENERGYMON_INST \
 	-td \
 	--rm \
 	--pid=host \
@@ -26,6 +35,5 @@ docker run \
 	--cap-add=ALL \
 	-v /dev:/dev \
 	-v /lib/modules:/lib/modules \
-	$DOCKER_IMG /bin/bash
+	$ENERGYMON_IMG /bin/bash
 #docker exec -ti $DOCKER_INST /bin/bash
-
