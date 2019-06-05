@@ -90,6 +90,56 @@ public:
 	};
 };
 
+class influxdbv2_client {
+	
+	std::string _write_url;
+	std::string _auth_header;
+	struct curl_slist *_slist;
+	CURL *_curl;
+	std::string _response_str;
+
+	static size_t get_response_chunk(const char *ptr, size_t size, size_t nmemb, influxdbv2_client *client) {
+		
+		client->_response_str += std::string(ptr, (size * nmemb));
+		return nmemb;
+	};
+
+public:
+	
+	influxdbv2_client(const std::string &url, const std::string &org_id, const std::string &auth_token, const std::string &bucket) : 
+		_write_url(url + "/write?precision=ns&org=" + org_id + "&bucket=" + bucket), _auth_header("Authorization: Token " + auth_token), _slist(NULL), _curl(NULL) {
+		
+		curl_global_init(CURL_GLOBAL_ALL);
+	};
+	
+	void write_points(const std::string &points) {
+		
+		_response_str = "";
+		_curl = curl_easy_init();
+		if (_curl) {
+			curl_easy_setopt(_curl, CURLOPT_URL, _write_url.c_str());
+			curl_easy_setopt(_curl, CURLOPT_POST, 1L);
+			_slist = NULL;
+			_slist = curl_slist_append(_slist, _auth_header.c_str());
+			curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, _slist);
+			curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, get_response_chunk);
+			curl_easy_setopt(_curl, CURLOPT_WRITEDATA, (void *)this);
+			curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, points.c_str());
+			CURLcode res = curl_easy_perform(_curl);
+			if (res != CURLE_OK) {
+				fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			};
+			char *url;
+			curl_easy_getinfo(_curl,CURLINFO_EFFECTIVE_URL, &url);
+			curl_easy_cleanup(_curl);
+			curl_slist_free_all(_slist);
+			printf("%s '%s'\n", _write_url.c_str(), _auth_header.c_str());
+			printf("%s\n", url);
+			printf("%s\n", _response_str.c_str());
+		};
+	};
+};
+
 class hires_clock {
 
 	std::chrono::high_resolution_clock _clock;
@@ -219,11 +269,10 @@ protected:
 	void collect() {
 		
 		check_error(emlStart());
-		usleep(collect_interval_usec / 2);
+		usleep(collect_interval_usec);
+		check_error(emlStop(_devdata));
 		system_top_mem top_mem(_sysrecord);
 		system_top_cpu top_cpu(_sysrecord);
-		usleep(collect_interval_usec / 2);
-		check_error(emlStop(_devdata));
 		
 		for (size_t dev_idx = 0; dev_idx < _devcount; ++dev_idx) {
 			check_error(emlDataGetConsumed(_devdata[dev_idx], &_devrecords[dev_idx]._consumed));
@@ -271,7 +320,11 @@ template <typename energymetric, typename influxdb_client> class energymon : pro
 	
 public:
 	
-	energymon(const std::string &sysname, const std::string &url, const std::string &username, const std::string &password) : energymetric(sysname), _influxdb(url, username, password) {};
+	energymon(const std::string &sysname, const std::string &url, const std::string &username, const std::string &password) : 
+		energymetric(sysname), _influxdb(url, username, password) {};
+		
+	energymon(const std::string &system_name, const std::string &db_url, const std::string &db_org_id, const std::string &db_auth_token, const std::string &db_bucket) : 
+		energymetric(system_name), _influxdb(db_url, db_org_id, db_auth_token, db_bucket) {};
 	
 	void poll() {
 			
@@ -292,7 +345,13 @@ public:
 
 int main() {
 	
-	energymon<energymetric_eml, influxdbv1_client> mon_eml("sut152", "https://localhost:8086/write?db=energydb0", "root", "root");
+	//energymon<energymetric_eml, influxdbv1_client> mon_eml("sut152", "https://localhost:8086/write?db=energydb0", "root", "root");
+	energymon<energymetric_eml, influxdbv2_client> mon_eml(
+		getenv("MON_SYSTEM_NAME"), 
+		getenv("MON_DB_URL"), 
+		getenv("MON_DB_ORG_ID"), 
+		getenv("MON_DB_AUTH_TOKEN"), 
+		getenv("MON_DB_BUCKET"));
 	mon_eml.poll();
 	return 0;
 };

@@ -19,3 +19,4 @@ RUN apt-get -y update && apt-get -y install libcurl4-openssl-dev
 COPY ./src /usr/local/src/energymon
 WORKDIR /usr/local/src
 RUN g++ -g ./energymon/energymon.cpp -leml -lcurl -o /usr/local/bin/energymon
+

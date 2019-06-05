@@ -20,3 +20,6 @@ RUN cp knucleotide-input25000000.txt ./C/k-nucleotide/
 RUN cp knucleotide-input25000000.txt ./Python/k-nucleotide/
 RUN cd ./C/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
 RUN cd ./Python/ && 2to3 -w ./compile_all.py && python ./compile_all.py compile
+RUN mkdir -p /etc/eml
+COPY ./eml/config /etc/eml/config
+

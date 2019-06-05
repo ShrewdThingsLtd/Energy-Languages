@@ -1,0 +1,4 @@
+rapl {
+  sampling_interval = 100000000
+}
+
