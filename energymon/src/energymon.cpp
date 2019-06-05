@@ -22,11 +22,13 @@ struct sysrecord {
 
 	std::string _sysname;
 	std::string _topmemapp;
+	std::string _topmempid;
 	std::string _topmemargs;
 	std::string _topmemtime;
 	std::string _topmem;
 	std::string _topmemcpu;
 	std::string _topcpuapp;
+	std::string _topcpupid;
 	std::string _topcpuargs;
 	std::string _topcputime;
 	std::string _topcpumem;
@@ -181,7 +183,7 @@ public:
 		
 	system_top_mem(sysrecord &rec) {
 		
-		exec("ps -heo %mem,%cpu,etime,ucmd,cmd --sort=-%mem | head -n 1");
+		exec("ps -heo %mem,%cpu,etime,ucmd,pid --sort=-%mem | head -n 1");
 		std::istringstream iss(get_ret_str());
 		std::vector<std::string> ret_vec {
 			std::istream_iterator<std::string>(iss), {}
@@ -190,6 +192,7 @@ public:
 		rec._topmemcpu = ret_vec[1];
 		rec._topmemtime = ret_vec[2];
 		rec._topmemapp = ret_vec[3];
+		rec._topmempid = ret_vec[4];
 		rec._topmemargs = ">";
 		for(uint64_t i = 5; i < ret_vec.size(); ++i) {
 			if((ret_vec[i].size() > 0) && (rec._topmemargs.size() + ret_vec[i].size() < sysrecord::args_str_limit)) {
@@ -206,7 +209,7 @@ public:
 		
 	system_top_cpu(sysrecord &rec) {
 		
-		exec("ps -heo %mem,%cpu,etime,ucmd,cmd --sort=-%cpu | head -n 1");
+		exec("ps -heo %mem,%cpu,etime,ucmd,pid --sort=-%cpu | head -n 1");
 		std::istringstream iss(get_ret_str());
 		std::vector<std::string> ret_vec {
 			std::istream_iterator<std::string>(iss), {}
@@ -215,6 +218,7 @@ public:
 		rec._topcpu = ret_vec[1];
 		rec._topcputime = ret_vec[2];
 		rec._topcpuapp = ret_vec[3];
+		rec._topcpupid = ret_vec[4];
 		rec._topcpuargs = ">";
 		for(uint64_t i = 5; i < ret_vec.size(); ++i) {
 			if((ret_vec[i].size() > 0) && (rec._topcpuargs.size() + ret_vec[i].size() < sysrecord::args_str_limit)) {
@@ -297,6 +301,7 @@ template <typename energymetric, typename influxdb_client> class energymon : pro
 	hires_clock _clock;
 	influxdb_client _influxdb;
 	
+	/*
 	void concat_sys_rec(std::string &sys_rec_str, const uint64_t now_nsec) {
 		
 		const sysrecord &sys_rec = energymetric::get_sys_rec();
@@ -309,12 +314,22 @@ template <typename energymetric, typename influxdb_client> class energymon : pro
 		sys_rec_str += ",topcpumem=" + sys_rec._topcpumem + ",topcpu=" + sys_rec._topcpu;
 		sys_rec_str += " " + std::to_string(now_nsec) + "\n";
 	};
+	*/
 	
-	void concat_dev_rec(std::string &dev_rec_str, const size_t dev_idx, const uint64_t now_nsec) {
+	void concat_dev_rec(std::string &dev_rec_str, const sysrecord &sys_rec, const devrecord &dev_rec, const uint64_t now_nsec) {
 		
-		const devrecord &dev_rec = energymetric::get_dev_rec(dev_idx);
 		dev_rec_str += dev_rec._devname + ",metrictype=" + energymetric::metrictype();
-		dev_rec_str += " consumed=" + std::to_string(dev_rec._consumed) + ",elapsed=" + std::to_string(dev_rec._elapsed) + ",jps=" + std::to_string(dev_rec._consumed / dev_rec._elapsed);
+		/*
+		dev_rec_str += ",topmemapp=" + sys_rec._topmemapp;
+		dev_rec_str += ",topcpuapp=" + sys_rec._topcpuapp;
+		dev_rec_str += ",topmemtime=" + sys_rec._topmemtime;
+		dev_rec_str += ",topcputime=" + sys_rec._topcputime;
+		*/
+		dev_rec_str += " topmem=" + sys_rec._topmem + ",topmemcpu=" + sys_rec._topmemcpu;
+		dev_rec_str += ",topmempid=" + sys_rec._topmempid;
+		dev_rec_str += ",topcpupid=" + sys_rec._topcpupid;
+		dev_rec_str += ",topcpumem=" + sys_rec._topcpumem + ",topcpu=" + sys_rec._topcpu;
+		dev_rec_str += ",consumed=" + std::to_string(dev_rec._consumed) + ",elapsed=" + std::to_string(dev_rec._elapsed) + ",jps=" + std::to_string(dev_rec._consumed / dev_rec._elapsed);
 		dev_rec_str += " " + std::to_string(now_nsec) + "\n";
 	};
 	
@@ -332,10 +347,12 @@ public:
 			energymetric::collect();
 			const uint64_t now_nsec = _clock.now_nsec();
 			std::string rec_str;
-			concat_sys_rec(rec_str, now_nsec);
+			//concat_sys_rec(rec_str, now_nsec);
 			const size_t devcount = energymetric::get_devcount();
+			const sysrecord &sys_rec = energymetric::get_sys_rec();
 			for (size_t dev_idx = 0; dev_idx < devcount; ++dev_idx) {
-				concat_dev_rec(rec_str, dev_idx, now_nsec);
+				const devrecord &dev_rec = energymetric::get_dev_rec(dev_idx);
+				concat_dev_rec(rec_str, sys_rec, dev_rec, now_nsec);
 			};
 			_influxdb.write_points(rec_str);
 			printf("%s", rec_str.c_str());
