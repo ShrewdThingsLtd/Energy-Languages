@@ -63,8 +63,8 @@ class influxdbv1_client {
 
 public:
 	
-	influxdbv1_client(const std::string &url, const std::string &username, const std::string &password) : 
-		_write_url(url), _username(username), _password(password), _curl(NULL) {
+	influxdbv1_client(const std::string &url, const std::pair<std::string, std::string> &credentials, const std::string &db_name) : 
+		_write_url(url + "/write?db=" + db_name), _username(credentials.first), _password(credentials.second), _curl(NULL) {
 		
 		curl_global_init(CURL_GLOBAL_ALL);
 	};
@@ -231,7 +231,8 @@ public:
 
 class energymetric_eml {
 	
-	static const useconds_t collect_interval_usec = 1000000;
+	static const char *sleep_expr;
+	
 	emlDevice_t **_devs;
 	emlData_t **_devdata;	
 	size_t _devcount;
@@ -245,12 +246,19 @@ class energymetric_eml {
 			exit(1);
 		};
 	};
+	
+	int32_t do_sleep() {
+		
+		return system(sleep_expr);
+	};
 
 protected:
 	
 	static const std::string metrictype() { return "eml"; };
 	
-	energymetric_eml(const std::string &sysname = "") : _devcount(0), _sysrecord(sysname) {
+	energymetric_eml(const std::string &sysname = "") : 
+		_devcount(0), 
+		_sysrecord(sysname) {
 		
 		static const std::string metrictype = "eml";
 		
@@ -273,7 +281,7 @@ protected:
 	void collect() {
 		
 		check_error(emlStart());
-		usleep(collect_interval_usec);
+		do_sleep();
 		check_error(emlStop(_devdata));
 		system_top_mem top_mem(_sysrecord);
 		system_top_cpu top_cpu(_sysrecord);
@@ -295,6 +303,7 @@ protected:
 		delete [] _devdata;
 	};
 };
+const char *energymetric_eml::sleep_expr = "sleep 1";
 
 template <typename energymetric, typename influxdb_client> class energymon : protected energymetric {
 	
@@ -320,12 +329,12 @@ template <typename energymetric, typename influxdb_client> class energymon : pro
 		
 		dev_rec_str += dev_rec._devname + ",metrictype=" + energymetric::metrictype();
 		/*
-		dev_rec_str += ",topmemapp=" + sys_rec._topmemapp;
-		dev_rec_str += ",topcpuapp=" + sys_rec._topcpuapp;
 		dev_rec_str += ",topmemtime=" + sys_rec._topmemtime;
 		dev_rec_str += ",topcputime=" + sys_rec._topcputime;
 		*/
 		dev_rec_str += " topmem=" + sys_rec._topmem + ",topmemcpu=" + sys_rec._topmemcpu;
+		dev_rec_str += ",topmemapp=\"" + sys_rec._topmemapp + "\"";
+		dev_rec_str += ",topcpuapp=\"" + sys_rec._topcpuapp + "\"";
 		dev_rec_str += ",topmempid=" + sys_rec._topmempid;
 		dev_rec_str += ",topcpupid=" + sys_rec._topcpupid;
 		dev_rec_str += ",topcpumem=" + sys_rec._topcpumem + ",topcpu=" + sys_rec._topcpu;
@@ -335,8 +344,8 @@ template <typename energymetric, typename influxdb_client> class energymon : pro
 	
 public:
 	
-	energymon(const std::string &sysname, const std::string &url, const std::string &username, const std::string &password) : 
-		energymetric(sysname), _influxdb(url, username, password) {};
+	energymon(const std::string &sysname, const std::string &url, const std::pair<std::string, std::string> &credentials, const std::string &db_name) : 
+		energymetric(sysname), _influxdb(url, credentials, db_name) {};
 		
 	energymon(const std::string &system_name, const std::string &db_url, const std::string &db_org_id, const std::string &db_auth_token, const std::string &db_bucket) : 
 		energymetric(system_name), _influxdb(db_url, db_org_id, db_auth_token, db_bucket) {};
@@ -363,12 +372,19 @@ public:
 int main() {
 	
 	//energymon<energymetric_eml, influxdbv1_client> mon_eml("sut152", "https://localhost:8086/write?db=energydb0", "root", "root");
+	energymon<energymetric_eml, influxdbv1_client> mon_eml(
+		getenv("MON_SYSTEM_NAME"), 
+		getenv("MON_DB_URL"), 
+		std::pair<std::string, std::string>(getenv("MON_DB_USERNAME"), getenv("MON_DB_PASSWORD")),
+		getenv("MON_DB_NAME"));
+	/*
 	energymon<energymetric_eml, influxdbv2_client> mon_eml(
 		getenv("MON_SYSTEM_NAME"), 
 		getenv("MON_DB_URL"), 
 		getenv("MON_DB_ORG_ID"), 
 		getenv("MON_DB_AUTH_TOKEN"), 
 		getenv("MON_DB_BUCKET"));
+	*/
 	mon_eml.poll();
 	return 0;
 };

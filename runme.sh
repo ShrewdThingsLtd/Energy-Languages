@@ -1,10 +1,13 @@
 #!/bin/bash
 #MAINTAINER erez@shrewdthings.com
 ENERGYBENCH_IMG='energybench-img'
+ENERGYBENCH_INST='energybench-inst'
 ENERGYMON_IMG='energymon-img'
 ENERGYMON_INST='energymon-inst'
 
 ROOTDIR=$PWD
+
+#ENERGYBENCH_CORES_LIMIT_FLAG='--cpus=8'
 
 docker_cleanup() {
 
@@ -24,6 +27,7 @@ docker build -t $ENERGYMON_IMG ./
 cd -
 
 docker kill $ENERGYMON_INST
+docker kill $ENERGYBENCH_INST
 docker_cleanup
 modprobe msr
 docker run \
@@ -36,4 +40,10 @@ docker run \
 	-v /dev:/dev \
 	-v /lib/modules:/lib/modules \
 	$ENERGYMON_IMG /bin/bash
-#docker exec -ti $DOCKER_INST /bin/bash
+
+docker run \
+	--name $ENERGYBENCH_INST \
+	-td \
+	--rm \
+	$ENERGYBENCH_CORES_LIMIT_FLAG \
+	$ENERGYBENCH_IMG /bin/bash
